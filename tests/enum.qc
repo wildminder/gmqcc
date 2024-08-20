@@ -28,9 +28,11 @@ enum {
 };
 
 enum : flag {
-    F1, /* = 1 << 1 */
-    F2, /* = 1 << 2 */
-    F3  /* = 1 << 3 */
+    F1, /* = 1 << 0 */
+    F2, /* = 1 << 1 */
+    F3, /* = 1 << 2 */
+    F4 = 16,
+    F5 = 32
 };
 
 /* reversed enumeration */
@@ -60,6 +62,8 @@ void main() {
     print(ftos(F1), "\n");
     print(ftos(F2), "\n");
     print(ftos(F3), "\n");
+    print(ftos(F4), "\n");
+    print(ftos(F5), "\n");
 
     print(ftos(R1), "\n");
     print(ftos(R2), "\n");
