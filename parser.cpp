@@ -3681,9 +3681,14 @@ static bool parse_enum(parser_t *parser)
         values.push_back(var);
         var->m_cvq             = CV_CONST;
         var->m_hasvalue        = true;
+        var->m_constval.vfloat = num;
 
         /* for flagged enumerations increment in POTs of TWO */
-        var->m_constval.vfloat = (flag) ? (num *= 2) : (num ++);
+        if (flag)
+            num = (num ? num * 2 : 1);
+        else
+            ++num;
+
         parser_addglobal(parser, var->m_name, var);
 
         if (!parser_next(parser)) {
@@ -3712,7 +3717,12 @@ static bool parse_enum(parser_t *parser)
             compile_error(var->m_context, "constant value or expression expected");
             return false;
         }
-        num = (var->m_constval.vfloat = asvalue->m_constval.vfloat) + 1;
+        num = (var->m_constval.vfloat = asvalue->m_constval.vfloat);
+        /* for flagged enumerations increment in POTs of TWO */
+        if (flag)
+            num = (num ? num * 2 : 1);
+        else
+            ++num;
 
         if (parser->tok == '}')
             break;
