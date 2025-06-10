@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.5...4.0)
 project(gmqcc)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
@@ -28,8 +28,10 @@ add_library(gmqcclib ${SOURCE_FILES})
 add_executable(gmqcc main.cpp)
 target_link_libraries(gmqcc gmqcclib)
 
-add_executable(testsuite test.cpp)
-target_link_libraries(testsuite gmqcclib)
+if(NOT WIN32)
+    add_executable(testsuite test.cpp)
+    target_link_libraries(testsuite gmqcclib)
+endif()
 
 add_executable(qcvm exec.cpp)
 target_link_libraries(qcvm gmqcclib)
