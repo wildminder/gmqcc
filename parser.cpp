@@ -377,10 +377,14 @@ static bool parser_sy_apply_operator(parser_t *parser, shunt *sy)
     if (!op->operands)
         return true;
 
-    sy->out.erase(sy->out.end() - op->operands, sy->out.end());
     for (i = 0; i < op->operands; ++i) {
-        exprs[i]  = sy->out[sy->out.size()+i].out;
-        blocks[i] = sy->out[sy->out.size()+i].block;
+		size_t index = sy->out.size() - op->operands + i;
+		exprs[i]  = sy->out[index].out;
+		blocks[i] = sy->out[index].block;
+	}
+	sy->out.erase(sy->out.end() - op->operands, sy->out.end());
+
+	for (i = 0; i < op->operands; ++i) {
 
         if (exprs[i]->m_vtype == TYPE_NOEXPR &&
             !(i != 0 && op->id == opid2('?',':')) &&
@@ -1292,7 +1296,7 @@ static bool parser_close_call(parser_t *parser, shunt *sy)
     }
 
     fold_leave:
-    call = ast_call::make(sy->ops[sy->ops.size()].ctx, fun);
+    call = ast_call::make(parser_ctx(parser), fun);
 
     if (!call)
         return false;
