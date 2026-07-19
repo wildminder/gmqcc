@@ -1,3 +1,15 @@
+# =========================================================================
+# gmqcc Compiler Makefile
+#
+# This Makefile is designed to be both:
+# 1. A standalone build system.
+# 2. An integrable component that respects configuration from a parent.
+#
+# All configuration uses the '?=' operator, allowing variables like CXX,
+# DEBUG, etc., to be overridden by the calling environment.
+# =========================================================================
+
+
 # Compilation options:
 # * LTO       - Link time optimization       [default=0]
 # * ASAN      - Address sanitizer            [default=0]
@@ -12,24 +24,31 @@ DEBUG ?= 0
 UNUSED ?= 1
 SRCDIR ?= ./
 
-# Determine if we're building for Windows or not so we can set the right file
-# extensions for the binaries and exclude the testsuite because it doesn't build
-# for that platform.
+# Toolchain (can be overridden)
+CXX ?= g++
+
+# Build Artifacts
+EXE_EXT :=
 ifeq ($(OS),Windows_NT)
-	GMQCC := gmqcc.exe
-	QCVM := qcvm.exe
-else
-	GMQCC := gmqcc
-	QCVM := qcvm
-	TESTSUITE := testsuite
+	EXE_EXT := .exe
 endif
 
-# C++ compiler
-CXX ?= clang++
+# Binaries are placed in the current directory.
+# Object files are kept in a local .build/ directory.
+GMQCC := gmqcc$(EXE_EXT)
+QCVM := qcvm$(EXE_EXT)
+TESTSUITE := testsuite$(EXE_EXT)
 
-# Build artifact directories
+
 OBJDIR := .build/objs
 DEPDIR := .build/deps
+
+# On Windows, don't try to build the testsuite, which has Unix dependencies.
+ifeq ($(OS),Windows_NT)
+	TARGETS := $(GMQCC) $(QCVM)
+else
+	TARGETS := $(GMQCC) $(QCVM) $(TESTSUITE)
+endif
 
 # Collect all the source files for GMQCC.
 GSRCS := ast.cpp
@@ -47,10 +66,11 @@ GSRCS += stat.cpp
 GSRCS += utf8.cpp
 GSRCS += util.cpp
 
+
 # Collect all the source files for QCVM.
 QSRCS := exec.cpp
-QSRCS += conout.cpp
-QSRCS += opts.cpp
+#QSRCS += conout.cpp
+#QSRCS += opts.cpp
 QSRCS += stat.cpp
 QSRCS += util.cpp
 
@@ -70,7 +90,6 @@ CXXFLAGS += -Wno-parentheses
 CXXFLAGS += -Wno-class-memaccess
 CXXFLAGS += -Wno-implicit-fallthrough
 CXXFLAGS += -std=c++11
-
 # Disable some unneeded features.
 CXXFLAGS += -fno-exceptions
 CXXFLAGS += -fno-rtti
@@ -108,7 +127,6 @@ else
 	else
 		CXXFLAGS += -fomit-frame-pointer
 	endif
-
 	# Highest optimization flag in release builds.
 	CXXFLAGS += -O3
 endif
@@ -150,57 +168,61 @@ ifeq ($(UBSAN),1)
 	LDFLAGS += -fsanitize=undefined
 endif
 
-# Strip the binaries when not a debug build
+# Stripper
+# Default to `strip` unless it's a debug build. Can be overridden by parent.
 ifneq (,$(findstring -g,$(CXXFLAGS)))
-	STRIP := true
+	STRIP ?= /bin/true # A command that does nothing
 else
-	STRIP := strip
+	STRIP ?= strip
 endif
 
-all: $(GMQCC) $(QCVM) $(TESTSUITE)
+# Main Targets
+.PHONY: all test clean
 
+all: $(TARGETS)
+
+# Create build directories if they don't exist.
 # Build artifact directories.
 $(DEPDIR):
 	@mkdir -p $(DEPDIR)
 $(OBJDIR):
 	@mkdir -p $(OBJDIR)
 
-$(OBJDIR)/%.o: %.cpp $(DEPDIR)/%.d | $(OBJDIR) $(DEPDIR)
+
+# Rule to compile a .cpp file into a .o file and generate a dependency file.
+# Note the use of $(SRCDIR) to correctly find sources.
+$(OBJDIR)/%.o: $(SRCDIR)%.cpp | $(OBJDIR) $(DEPDIR)
+	@echo "Compiling $<"
 	$(CXX) -MT $@ $(DEPFLAGS) -MF $(DEPDIR)/$*.Td $(CXXFLAGS) -c -o $@ $<
 	@mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
-$(GMQCC): $(filter %.o,$(GSRCS:%.cpp=$(OBJDIR)/%.o))
+# Linking Targets
+$(GMQCC): $(GSRCS:%.cpp=$(OBJDIR)/%.o)
+	@echo "Linking $@"
 	$(CXX) $^ $(LDFLAGS) -o $@
 	$(STRIP) $@
 
-$(QCVM): $(filter %.o,$(QSRCS:%.cpp=$(OBJDIR)/%.o))
+$(QCVM): $(QSRCS:%.cpp=$(OBJDIR)/%.o)
+	@echo "Linking $@"
 	$(CXX) $^ $(LDFLAGS) -o $@
 	$(STRIP) $@
 
-$(TESTSUITE): $(filter %.o,$(TSRCS:%.cpp=$(OBJDIR)/%.o))
+$(TESTSUITE): $(TSRCS:%.cpp=$(OBJDIR)/%.o)
+	@echo "Linking $@"
 	$(CXX) $^ $(LDFLAGS) -o $@
 	$(STRIP) $@
 
-# Determine if the tests should be run.
-RUNTESTS := true
-ifdef TESTSUITE
-	RUNTESTS := ./$(TESTSUITE)
+# Utility Targets
+test: $(QCVM) $(TESTSUITE)
+ifeq ($(OS),Windows_NT)
+	@echo "Testsuite is not supported on Windows."
+else
+	@./$(TESTSUTIE)
 endif
 
-test: $(QCVM) $(TESTSUITE)
-	@$(RUNTESTS)
-
 clean:
-	rm -rf $(DEPDIR) $(OBJDIR)
+	@echo "Cleaning gmqcc artifacts..."
+	@rm -rf $(DEPDIR) $(OBJDIR) $(GMQCC) $(QCVM) $(TESTSUITE)
 
-.PHONY: test clean $(DEPDIR) $(OBJDIR)
-
-# Dependencies
-$(filter %.d,$(GSRCS:%.cpp=$(DEPDIR)/%.d)):
-include $(wildcard $@)
-
-$(filter %.d,$(QSRCS:%.cpp=$(DEPDIR)/%.d)):
-include $(wildcard $@)
-
-$(filter %.d,$(TSRCS:%.cpp=$(DEPDIR)/%.d)):
-include $(wildcard $@)
+# Include all generated dependency files.
+-include $(wildcard $(DEPDIR)/*.d)
